@@ -1,0 +1,348 @@
+---
+title: "DUNL Morphomtric Analysis"
+author: "Gianco AngelozziBlanco"
+date: "2024-03-29"
+output: html_document
+---
+
+## Tringa Analysis: these data come from Ruthrauff, D.R., Tibbitts, T.L., Gill, Jr., R.E., Handel, C.M., 2023, Adult shorebird morphological measurement data (ver 3.0, November 2024): U.S. Geological Survey data release, https://doi.org/10.5066/P9KNRWXB
+```{r}
+library(tidyverse)
+library(ggpubr)
+library(emmeans)
+library(DHARMa)
+library(car)
+alaska_shorb_data<-read_csv("adultShorebird_morphologicalMeasurements_values.csv")
+
+tringa_data=alaska_shorb_data%>%filter(Common_Name%in%c("Greater Yellowlegs", "Lesser Yellowlegs"),,
+         !is.na(Diagonal_Tarsus),
+         !is.na(Exposed_Culmen))%>% ##remove birds that had no measurements taken
+  mutate(bt_ratio=Exposed_Culmen/Diagonal_Tarsus)%>%
+  rename("species"=Common_Name)%>%##rename Common name to species
+  filter(!bt_ratio>1)## filter 2 outliers
+
+tringa_data%>%mutate(species=as.factor(species))%>%
+  ggplot(aes(x = species, y=bt_ratio))+
+  geom_boxplot(aes(x = species, y=bt_ratio,colour=species))+
+  geom_jitter(aes(x = species, y=bt_ratio, colour=species))+scale_colour_viridis_d(direction = -1, begin = .4, end = .8)+
+  ylab("bill-to-tarsus ratio")+
+  ggpubr::theme_pubr(base_size = 14) ## 2 values for LEYE are way out of range
+
+
+lm_ratio<-lm(bt_ratio~species, data = tringa_data)
+simulateResiduals(lm_ratio, plot=T) #no issues with variance or dispersion
+summary(lm_ratio)
+Anova(lm_ratio, type = "II") #type II ss for degrees of freedom (unequal sample sizes suspected). Ratios differ by species
+
+emmeans(lm_ratio, specs = "species") ## mean for GRYE 0.94, mean for LEYE 0.67, no CI overlap at all
+
+contrast(emm, method = "pairwise")%>%as.data.frame() #the mean difference is 0.23 in ratio scale between species
+
+emm <- emmeans(lm_ratio, ~ species) %>%
+  as.data.frame()
+
+ggplot(emm, aes(x = species, y = emmean)) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.2) +  # CI
+  geom_point(size = 4, aes(colour=species)) +  # Mean estimate
+  labs(x = "Group", y = "Estimated Mean", title = "Estimated Marginal Means with 95% CIs") +scale_colour_viridis_d(direction = -1, begin = .4, end = .8)+
+  ggpubr::theme_pubr(base_size = 14) ##final plot for the differences between species.
+
+```
+## Calidris alpina analysis
+
+## Generate distributions for tarsus and bill - arctica (Greenwood 1979)
+
+```{r}
+library("DescTools")
+set.seed(100)
+
+arct_male<-RndPairs(50, r=0, rdist1 = rnorm(n = 50, mean = 22.8, sd=.64), ##simulation male arctica
+         rdist2 = rnorm(n = 50, mean = 26.1, sd=1.1))
+subspp<-paste0(rep("arctica", each=50))
+sex<-paste0(rep("male"))
+x1<-cbind(subspp, sex)
+  
+arct_female<-RndPairs(50, r=0, rdist1 = rnorm(n = 50, mean = 23.4, sd=.91), ##simulation female arctica
+         rdist2 = rnorm(n = 50, mean = 29.5, sd=1.09))
+subspp<-paste0(rep("arctica", each=50))
+sex<-paste0(rep("female"))
+x2<-cbind(subspp, sex)
+
+act_sex<-rbind(x1,x2)
+
+
+arctica<-rbind.data.frame(arct_male, arct_female)
+
+Dunl1<-cbind(arctica, act_sex)
+
+```
+##Generate distributions for tarsus and bill - schinzii (Greenwood 1979)
+
+```{r}
+schinz_male<-RndPairs(50, r=0, rdist1 = rnorm(n = 50, mean = 24.1, sd=.84), ##male schinzii
+         rdist2 = rnorm(n = 50, mean = 28.7, sd=1.74))
+subspp<-paste0(rep("schinzii", each=50))
+sex<-paste0(rep("male"))
+x1<-cbind(subspp, sex)
+  
+schinz_female<-RndPairs(50, r=0, rdist1 = rnorm(n = 50, mean = 25.1, sd=.92), ##female schinzii
+         rdist2 = rnorm(n = 50, mean=31.7, sd=2.05))
+subspp<-paste0(rep("schinzii", each=50))
+sex<-paste0(rep("female"))
+x1<-cbind(subspp, sex)
+
+sch_sex<-rbind(x1,x2)
+sch<-rbind.data.frame(schinz_male, schinz_female)
+
+Dunl2<-cbind(sch, sch_sex)
+
+#tars_shin_male<-rnorm(50, mean = 24.1, sd=.84)
+#bill_shin_male<-rnorm(50, mean = 28.7, sd=1.74)
+#tars_shin_female <-rnorm(50, mean = 25.1, sd=.92)
+#bill_shin_female<-rnorm(50, mean = 31.7, sd=2.05)
+```
+## Generate distributions for tarsus and bill - hudsonia
+
+```{r}
+huds_male<-RndPairs(50, r=0, rdist1 = rnorm(n = 50, mean = 27.39, sd=.06),
+         rdist2 = rnorm(n = 50, mean = 48.96, sd=2.43))
+subspp<-paste0(rep("husdonia", each=50))
+sex<-paste0(rep("male"))
+x1<-cbind(subspp, sex)
+  
+huds_female<-RndPairs(50, r=0, rdist1 = rnorm(n = 50, mean = 27.44, sd=.76),
+         rdist2 = rnorm(n = 50, mean = 50.26, sd=2.44))
+subspp<-paste0(rep("husdonia", each=50))
+sex<-paste0(rep("female"))
+x2<-cbind(subspp, sex)
+
+hud_sex<-rbind(x1,x2)
+hud<-rbind.data.frame(huds_male, huds_female)
+
+Dunl3<-cbind(hud, hud_sex)
+
+
+DUNL_test<-rbind.data.frame(Dunl1, Dunl2, Dunl3)
+names(DUNL_test) <- c("tarsus", "bill", "subspp", "sex")
+write.csv(DUNL_test, "DUNLsim2.csv", row.names = F) ##This is the exact file I worked out below.
+
+
+```
+
+##Read dataset
+```{r}
+library(tidyverse)
+
+dunl<-read.csv("DUNLsim.csv")
+
+dunl<-dunl[,1:4] #get rid of garbage variables and rows
+dunl$btot<-dunl$bill/dunl$tarsus
+dunl$sex<-as.factor(dunl$sex)
+dunl$subspp<-as.factor(dunl$subspp)
+
+str(dunl)
+dunl$btot<-round(dunl$btot, digits = 2)
+
+dunl<-dunl%>%
+  filter(!is.na(bill))
+
+dunl%>%
+  group_by(subspp, sex)%>%
+  summarise(median=median(btot), mean=mean(btot), sd=sd(btot), min=min(btot), max=max(btot))%>%
+  ggplot( aes(x=subspp, y=mean, colour=sex)) +  
+  geom_point(aes(colour=sex))+ 
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.2, 
+                position=position_dodge(0.0))+
+  geom_hline(yintercept = 1.16)+
+  xlab("Subspecies")+
+  ylab("bill-to-tarsus ratio")
+
+
+summary_stats_bySpSex<-dunl%>%
+  group_by(subspp, sex)%>%
+  summarise(mean=mean(btot), sd=sd(btot), min=min(btot), max=max(btot))
+
+```
+## Getting Z scores
+```{r} 
+calculate_z <- function(X, X_mean, S){
+  return((X-X_mean)/S)
+}
+
+dunl$z_score <- calculate_z(dunl$btot, 
+                             mean(dunl$btot, na.rm = TRUE),
+                             sd(dunl$btot, na.rm = TRUE))
+
+theme_coding_the_past <- function() {
+  theme_bw()+
+  theme(# Changes panel, plot and legend background to dark gray:
+        panel.background = element_rect(fill = '#2E3031'),
+        plot.background = element_rect(fill = '#2E3031'),
+        legend.background = element_rect(fill="#2E3031"),
+        # Changes legend texts color to white:
+        legend.text =  element_text(color = "white"),
+        legend.title = element_text(color = "white"),
+        # Changes color of plot border to white:
+        panel.border = element_rect(color = "white"),
+        # Eliminates grids:
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        # Changes color of axis texts to white
+        axis.text.x = element_text(color = "white"),
+        axis.text.y = element_text(color = "white"),
+        axis.title.x = element_text(color="white"),
+        axis.title.y = element_text(color="white"),
+        # Changes axis ticks color to white
+        axis.ticks.y = element_line(color = "white"),
+        axis.ticks.x = element_line(color = "white")
+  )
+}
+
+summ_stats_all<-dunl%>%
+  select(subspp, btot)%>%
+  group_by(subspp)%>%
+  summarise(mean=mean(btot), sd=sd(btot))
+  
+
+summ_stats_hudsonia<-dunl%>%
+  select(subspp, sex, btot)%>%
+  group_by_("sex")%>%
+  filter(subspp=="hudsonia")%>%
+  summarise(mean=mean(btot), sd=sd(btot))
+
+summ_stats_hudsonia
+
+meanF<-summ_stats_hudsonia$mean[1]
+sdF<-summ_stats_hudsonia$sd[1]
+
+meanM<-summ_stats_hudsonia$mean[2]
+sdM<-summ_stats_hudsonia$sd[2]
+
+hud_f=dunl%>%
+  select(subspp,sex, btot)%>%
+  filter(subspp=="hudsonia" & sex=="female")%>%
+ggplot(aes(x = btot))+
+  geom_histogram(fill = "grey55", 
+                color = "#FF6885", 
+                alpha = 0.6, 
+                bins = 20)+
+  ylab("Count")+
+  xlab("Bill-to-Tarsus Ratio")+
+  geom_vline(xintercept = meanF + 2*sdF, 
+             color = "black",   
+             linetype = "dashed")+
+  geom_vline(xintercept = meanF - 2*sdF, 
+             color = "black",   
+             linetype = "dashed")+
+  geom_vline(xintercept = meanF + 3*sdF, 
+             color = "red", 
+             linetype = "dashed")+
+  geom_vline(xintercept = meanF - 3*sdF, 
+             color = "red", 
+             linetype = "dashed")+
+  annotate("text", x = 1.62,  y = 20, 
+            label = "Z=-3", color = "#feb24c")+
+  annotate("text", x = 2.2,   y = 20, 
+            label = "Z=3",  color = "#feb24c")+
+  annotate("text", x = 1.68,  y = 20, 
+            label = "Z=-2", color = "red")+
+  annotate("text", x = 1.93, y = 20, 
+            label = "Z=2",  color = "red")+
+  theme_minimal()+ggtitle("Z-scores for female hudsonia") ## histogram for Z-scores of female hudsonia
+
+hud_m=dunl%>%
+  select(subspp,sex, btot)%>%
+  filter(subspp=="hudsonia" & sex=="male")%>%
+ggplot(aes(x = btot))+
+  geom_histogram(fill = "grey55", 
+                color = "#FF6885", 
+                alpha = 0.6, 
+                bins = 20)+
+  ylab("Count")+
+  xlab("Bill-to-Tarsus Ratio")+
+  geom_vline(xintercept = meanM + 2*sdM, 
+             color = "black",   
+             linetype = "dashed")+
+  geom_vline(xintercept = meanM - 2*sdM, 
+             color = "black",   
+             linetype = "dashed")+
+  geom_vline(xintercept = meanM + 3*sdM, 
+             color = "red", 
+             linetype = "dashed")+
+  geom_vline(xintercept = meanM - 3*sdM, 
+             color = "red", 
+             linetype = "dashed")+
+  annotate("text", x = 1.62,  y = 20, 
+            label = "Z=-3", color = "red")+
+  annotate("text", x = 1.9,   y = 20, 
+            label = "Z=3",  color = "red")+
+  annotate("text", x = 1.68,  y = 20, 
+            label = "Z=-2", color = "black")+
+  annotate("text", x = 1.93, y = 20, 
+            label = "Z=2",  color = "black")+
+  theme_minimal()+ggtitle("Z-scores for male hudsonia") ## z-scores for male hudsonia
+
+print(summary_stats_bySpSex)
+
+Dunl_coche<-2.20/2 ##Bill to Tarsus ratio from Coche Dunlin (in pixel units)
+Dunl_coche
+
+##Measuring variability in BtoT ratio- these come from the photograps taken by Sabino 
+
+a<-(3.5/3.2) ##trial photo 1
+b<-(5.8/5.1)##trial photo 2
+c<-(4.4/3.9)##trial photo 3
+rbind(a,b,c)
+3.359/3
+
+sd(rbind(a,b,c)) ##the most amazing SD, very small.
+
+  ##Z-scores per subspp and sex- score from coche-mean score/sd for the sex x race
+far<-(Dunl_coche-1.2398)/0.07092652 #ArctFem
+mar<-(Dunl_coche-1.1288)/0.05457218 #ArctMal
+fsc<-(Dunl_coche-1.2572)/0.11243211 #SchiFem
+msc<-(Dunl_coche-1.1910)/0.07754525 #SchiMal
+fhu<-(Dunl_coche-1.8262)/0.04494396 #HudFem
+mhu<-(Dunl_coche-1.7832)/0.07851790 #HudMal
+
+far #Z-scores by subspp x sex combo
+mar
+fsc
+msc
+fhu
+mhu
+
+#p-values for the comparisons
+round((1-pnorm(abs(far)))*2, digits = 2)
+(1-pnorm(abs(mar)))*2
+(1-pnorm(abs(fsc)))*2
+(1-pnorm(abs(msc)))*2
+(1-pnorm(abs(fhu)))*2
+(1-pnorm(abs(mhu)))*2
+
+```
+##Graph Subspp by Sex + Sabino's DUNL
+```{r}
+library(ggpubr)
+library(tidyverse)
+
+
+DNLN_box<-dunl%>%
+  ggplot(aes(x=fct_reorder(subspp, btot, .fun = median,.desc = F), y=btot, fill=sex))+
+  geom_boxplot(alpha=.5)+
+scale_fill_grey()+
+  geom_hline(yintercept = 1.1, show.legend = T, linetype=2, colour="blue")+
+  xlab("Dunlin Subspecies")+
+  ylab("Bill to Tarsus Ratio")+
+  theme(legend.position = "right")+
+  theme_pubr(border = T, legend = "right")+
+  annotate("text", x=1.42, y=1.43, label="Most likely subspecies", size=3)+ 
+  annotate("rect", xmin = 0.6, xmax = 2.4, ymin = 1.02, ymax = 1.45,
+  alpha = .15)+ theme(axis.text.x = element_text(face = "italic"))+ 
+  theme(legend.position = c(0.092, 0.80))+
+  theme(legend.background = element_rect(fill="gray95", 
+                                  size=0.5, linetype="solid"))
+DNLN_box
+
+ggsave("DUNL.jpeg", plot = DNLN_box, dpi = 350, device = "jpeg", units="cm",width = 15, height = 7.5)
+```
